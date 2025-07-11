@@ -14,7 +14,7 @@ services:
       - ./vhost.d:/etc/nginx/vhost.d:ro # Arquivos de configuração específicos (read-only para nginx)
       - ./html:/usr/share/nginx/html:ro # Páginas HTML de desafio Let's Encrypt (read-only para nginx)
     labels:
-      com.github.nginx-proxy.nginx: nginx-proxy
+      com.github.nginx-proxy.nginx-proxy.nginx: "true" # identifica o container principal do proxy
       com.github.nginx-proxy.docker-gen: true # Mantém este label, é importante
     networks:
       - proxy

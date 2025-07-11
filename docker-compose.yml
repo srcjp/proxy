@@ -15,6 +15,8 @@ services:
     labels:
       # opcional, mas reforça a ligação
       com.github.nginx-proxy.nginx: nginx-proxy
+      # ADICIONE ESTA LINHA:
+      com.github.nginx-proxy.docker-gen: true
     networks:
       - proxy
 
@@ -26,6 +28,9 @@ services:
       - proxy
     environment:
       - NGINX_PROXY_CONTAINER=nginx-proxy
+      - DEFAULT_EMAIL=jpfurlan@hotmail.com.br
+      # É uma boa prática adicionar o email padrão aqui também, se não estiver definido em outro lugar:
+      # - DEFAULT_EMAIL=seu_email@example.com # Use o email que você definiu no .env do feiraslondrina (jpfurlan@hotmail.com.br)
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - ./certs:/etc/nginx/certs

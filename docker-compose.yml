@@ -1,6 +1,7 @@
 version: '3.8'
 services:
-  proxy:
+  # Serviço do Nginx Proxy
+  nginx-proxy:
     image: jwilder/nginx-proxy:alpine
     container_name: nginx-proxy
     restart: unless-stopped
@@ -8,34 +9,31 @@ services:
       - '80:80'
       - '443:443'
     volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro
-      - ./certs:/etc/nginx/certs
-      - ./vhost.d:/etc/nginx/vhost.d
-      - ./html:/usr/share/nginx/html
+      - /var/run/docker.sock:/tmp/docker.sock:ro # Mantenha este para docker-gen
+      - ./certs:/etc/nginx/certs:ro # Certificados Let's Encrypt (read-only para nginx)
+      - ./vhost.d:/etc/nginx/vhost.d:ro # Arquivos de configuração específicos (read-only para nginx)
+      - ./html:/usr/share/nginx/html:ro # Páginas HTML de desafio Let's Encrypt (read-only para nginx)
     labels:
-      # opcional, mas reforça a ligação
       com.github.nginx-proxy.nginx: nginx-proxy
-      # ADICIONE ESTA LINHA:
-      com.github.nginx-proxy.docker-gen: true
+      com.github.nginx-proxy.docker-gen: true # Mantém este label, é importante
     networks:
       - proxy
 
+  # Serviço Let's Encrypt Companion
   letsencrypt:
     image: jrcs/letsencrypt-nginx-proxy-companion
     container_name: nginx-letsencrypt
     restart: unless-stopped
     depends_on:
-      - proxy
-    environment:
-      - NGINX_PROXY_CONTAINER=nginx-proxy
-      - DEFAULT_EMAIL=jpfurlan@hotmail.com.br
-      # É uma boa prática adicionar o email padrão aqui também, se não estiver definido em outro lugar:
-      # - DEFAULT_EMAIL=seu_email@example.com # Use o email que você definiu no .env do feiraslondrina (jpfurlan@hotmail.com.br)
+      - nginx-proxy # Depende do proxy
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./certs:/etc/nginx/certs
-      - ./vhost.d:/etc/nginx/vhost.d
-      - ./html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Acesso ao daemon Docker
+      - ./certs:/etc/nginx/certs # Certificados Let's Encrypt (companion precisa escrever)
+      - ./vhost.d:/etc/nginx/vhost.d # Arquivos de configuração específicos (companion precisa escrever)
+      - ./html:/usr/share/nginx/html # Páginas HTML de desafio Let's Encrypt (companion precisa escrever)
+    environment:
+      - NGINX_PROXY_CONTAINER=nginx-proxy # Garante que o companion saiba o nome do proxy
+      - DEFAULT_EMAIL=jpfurlan@hotmail.com.br # Certifique-se de que seu email está aqui!
     networks:
       - proxy
 

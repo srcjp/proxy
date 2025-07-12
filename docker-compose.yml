@@ -1,43 +1,57 @@
+# docker-compose.yml (para o Traefik, na sua pasta 'proxy')
 version: '3.8'
+
 services:
-  # Serviço do Nginx Proxy
-  proxy:
-    image: jwilder/nginx-proxy:latest # Alterado para :latest
-    container_name: nginx-proxy
+  traefik:
+    image: traefik:v2.11 # Use a versão mais recente estável
+    container_name: traefik_proxy
     restart: unless-stopped
     ports:
-      - '80:80'
-      - '443:443'
+      - '80:80' # Porta HTTP (para redirecionar para HTTPS e desafios Let's Encrypt)
+      - '443:443' # Porta HTTPS
+      # Opcional: Porta para o Dashboard do Traefik (acessível por autenticação/IP restrito em produção)
+      - '8080:8080' # Porta para o dashboard de UI do Traefik (ex: http://seu-ip:8080)
     volumes:
-      - /var/run/docker.sock:/tmp/docker.sock:ro # Mantenha este para docker-gen
-      - ./certs:/etc/nginx/certs:ro # Certificados Let's Encrypt (read-only para nginx)
-      - ./vhost.d:/etc/nginx/vhost.d:ro # Arquivos de configuração específicos (read-only para nginx)
-      - ./html:/usr/share/nginx/html:ro # Páginas HTML de desafio Let's Encrypt (read-only para nginx)
-    labels:
-      com.github.nginx-proxy.nginx-proxy.nginx: "true" # identifica o container principal do proxy
-      com.github.nginx-proxy.docker-gen: true # Mantém este label, é importante
-    networks:
-      - proxy
-    command: tail -f /dev/null # <-- ADICIONE ESTA LINHA AQUI!
+      - /var/run/docker.sock:/var/run/docker.sock:ro # Acesso ao daemon Docker (somente leitura)
+      - ./traefik-data:/etc/traefik/ # Volume para armazenar certificados Let's Encrypt e configuração dinâmica
+    command:
+      # Habilita o provedor Docker para auto-descoberta de serviços
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false # Traefik só roteia contêineres com labels 'traefik.enable=true'
 
-  # Serviço Let's Encrypt Companion
-  letsencrypt:
-    image: jrcs/letsencrypt-nginx-proxy-companion
-    container_name: nginx-letsencrypt
-    restart: unless-stopped
-    depends_on:
-      - proxy # Depende do proxy
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro # Acesso ao daemon Docker
-      - ./certs:/etc/nginx/certs # Certificados Let's Encrypt (companion precisa escrever)
-      - ./vhost.d:/etc/nginx/vhost.d # Arquivos de configuração específicos (companion precisa escrever)
-      - ./html:/usr/share/nginx/html # Páginas HTML de desafio Let's Encrypt (companion precisa escrever)
-    environment:
-      - NGINX_PROXY_CONTAINER=nginx-proxy # Garante que o companion saiba o nome do proxy
-      - DEFAULT_EMAIL=jpfurlan@hotmail.com.br # Certifique-se de que seu email está aqui!
+      # Configuração de Entrypoints (portas de entrada)
+      - --entrypoints.web.address=:80 # Entrypoint para tráfego HTTP
+      - --entrypoints.websecure.address=:443 # Entrypoint para tráfego HTTPS
+
+      # Redirecionamento HTTP para HTTPS: Middleware global aplicado ao entrypoint 'web'
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+
+      # Configuração de Certificação (Let's Encrypt)
+      - --certificatesresolvers.myresolver.acme.email=jpfurlan@hotmail.com.br # SEU EMAIL AQUI
+      - --certificatesresolvers.myresolver.acme.storage=/etc/traefik/acme.json # Onde armazenar os certificados
+      - --certificatesresolvers.myresolver.acme.tlschallenge=true # Usar TLS-ALPN Challenge (recomendado, usa porta 443)
+      # Alternativa: Para usar HTTP-01 Challenge (usa porta 80, bom como fallback ou se 443 for problemático para validação)
+      # - --certificatesresolvers.myresolver.acme.httpchallenge=true
+      # - --certificatesresolvers.myresolver.acme.httpchallenge.entrypoint=web
+
+      # Configuração da API e Dashboard (OPCIONAL, para monitoramento)
+      - --api.dashboard=true # Habilita o dashboard de UI
+      - --api.insecure=true # CUIDADO: Habilita acesso ao dashboard sem autenticação. REMOVA EM PRODUÇÃO!
+        # Para produção, use middlewares de autenticação (ex: basic auth)
+
+      # Nível de log (opcional, para depuração)
+      # - --log.level=DEBUG
+
     networks:
       - proxy
 
 networks:
   proxy:
-    external: true
+    external: true # Usa a rede 'proxy' existente para comunicação com suas aplicações
+
+volumes:
+  traefik-data:# Este é um volume nomeado que o Traefik usará
+  # Se você quiser que o docker-compose o crie e gerencie, deixe assim.
+  # Se você já tiver um volume chamado 'traefik-data' e quiser usar ele, adicione 'external: true'
+  # mas o mais comum é deixar o compose gerenciar um volume para o Traefik.
